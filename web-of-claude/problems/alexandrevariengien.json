@@ -1,0 +1,46 @@
+{
+  "author": "alexandrevariengien",
+  "folder": "substack_posts_alexandrevariengien",
+  "analyzed_at": "2026-02-10T15:21:57.811885",
+  "posts_analyzed": 20,
+  "posts_truncated": 0,
+  "posts_errored": 0,
+  "problems": [
+    {
+      "problem": "Building AI-powered discourse mapping/sense-making prototypes for Community Archive",
+      "description": "In 'exoskeletons for online communities,' the author is actively prototyping AI-powered sense-making services that help online discourse compound over time. They mention working with @xiq on a prototype exploring discourse mappings of the quality of Zvi Mowshowitz's AI news coverage. This is an active build, not just intellectual speculation.",
+      "evidence": [
+        "I am currently working with @xiq on a prototype exploring this direction. Stay posted for future updates!",
+        "A longer-term vision could be to create researcher agents that are able to produce discourse mappings of the quality of Zvi Mowshowitz's AI news coverage",
+        "Epistemic Garden's prototypes of trend visualizers and embedding maps aim to provide the sense-making services",
+        "AI can dramatically reduce the cost of these last two types of services, opening up the possibility of bringing to organic online communities coordination qualities"
+      ],
+      "email_open_score": 6,
+      "email_open_reasoning": "This is clearly an active project the author is working on, as evidenced by the closing statement about current work. However, there's no explicit ask for help, resources, or collaboration. The author seems to be in execution mode with a collaborator already. A stranger's relevant expertise might be interesting but not urgently needed.",
+      "persistence_months": 8,
+      "persistence_reasoning": "The author is actively working on prototypes and mentions 'longer-term vision,' suggesting this is a sustained multi-month effort. The Community Archive already has 7 million tweets and multiple prototypes exist, indicating this is a mature enough project to continue for many months.",
+      "category": "creative_block",
+      "source_post": "exoskeletons for online communities",
+      "source_date": "2025-11-17"
+    },
+    {
+      "problem": "Seeking collaborators or advice on Twitter data analysis project",
+      "description": "In \"on publishing every day for 30 days,\" the author mentions starting \"a collaboration with Francisco, working on Twitter data analysis\" while also noting it was tiring to balance this with the daily writing challenge. This suggests an active, ongoing project that may benefit from additional expertise or resources.",
+      "evidence": [
+        "working between three to five hours every day on writing, while starting a collaboration with Francisco, working on Twitter data analysis",
+        "If you are interested in taking a similar challenge, feel free to get in touch! I'd be happy to talk about my experience."
+      ],
+      "email_open_score": 4,
+      "email_open_reasoning": "While the Twitter data analysis collaboration is mentioned, it's described as something he's starting, not as a blocker or explicit need. The author doesn't ask for help with this project specifically. It's background context rather than an urgent problem.",
+      "persistence_months": 3,
+      "persistence_reasoning": "The project is just starting, suggesting it will continue for at least a few months. However, given limited detail and the author's recent intense focus on writing, the trajectory of this collaboration is uncertain.",
+      "category": "collaboration_need",
+      "source_post": "on publishing every day for 30 days",
+      "source_date": "2025-12-02"
+    }
+  ],
+  "usage": {
+    "input_tokens": 94153,
+    "output_tokens": 1370
+  }
+}

@@ -1,0 +1,21 @@
+[project]
+name = "econ-model-claudeconnect"
+version = "0.1.0"
+description = "Social network simulation for problem-opportunity matching"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "networkx",
+  "numpy",
+  "pandas",
+  "plotly",
+  "pyvis",
+  "streamlit",
+]
+
+[tool.uv]
+package = false
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

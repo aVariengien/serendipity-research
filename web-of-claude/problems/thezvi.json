@@ -1,0 +1,31 @@
+{
+  "author": "thezvi",
+  "folder": "substack_posts_thezvi",
+  "analyzed_at": "2026-02-10T15:24:06.420524",
+  "posts_analyzed": 20,
+  "posts_truncated": 9,
+  "posts_errored": 1,
+  "problems": [
+    {
+      "problem": "Need unified explainer posts for AI futures economic debates",
+      "description": "In \"dos capital,\" the author explicitly states a goal for Q1 2026: \"to write unified explainer posts for all the standard economic debates around potential AI futures in a systematic fashion.\" He notes these debates repeatedly cover the same points with unstated/unrealized assumptions, and \"reference posts are needed.\" This post is an interim response while working toward that larger project.",
+      "evidence": [
+        "One of my goals for Q1 2026 is to write unified explainer posts for all the standard economic debates around potential AI futures in a systematic fashion.",
+        "These debates tend to repeatedly cover the same points, and those making economic arguments continuously assume you must be misunderstanding elementary economic principles, or failing to apply them for no good reason.",
+        "Key assumptions are often unstated and even unrealized, and also false or even absurd. Reference posts are needed.",
+        "That will take longer, so instead this post covers the specific discussions and questions around the post by Trammell and Patel."
+      ],
+      "email_open_score": 7,
+      "email_open_reasoning": "This is an explicitly stated project goal with a clear deadline (Q1 2026) that the author is actively working on. The author demonstrates frustration with how these debates currently unfold and sees clear value in creating systematic reference material. Would likely engage with relevant expertise or collaboration offers.",
+      "persistence_months": 3,
+      "persistence_reasoning": "The author has set a Q1 2026 deadline for this project, which means approximately 3 months from the post date. This is a specific, time-bound commitment that he's actively working toward.",
+      "category": "project_blocker",
+      "source_post": "dos capital",
+      "source_date": "2026-01-05"
+    }
+  ],
+  "usage": {
+    "input_tokens": 219135,
+    "output_tokens": 1036
+  }
+}

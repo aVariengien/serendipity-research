@@ -1,0 +1,29 @@
+{
+  "author": "sublimeinternet",
+  "folder": "substack_posts_sublimeinternet",
+  "analyzed_at": "2026-02-10T15:22:55.199101",
+  "posts_analyzed": 20,
+  "posts_truncated": 0,
+  "posts_errored": 0,
+  "problems": [
+    {
+      "problem": "Need feedback signals to decide if we continue making AI x Creativity interviews",
+      "description": "The author has just finished 'Whoa, Vol II: Conversations on AI x Creativity' and explicitly asks readers to 'send us a signal so we know you want us to keep making them.' They describe the project as 'a labor of love (emphasis on labor!)' indicating it's resource-intensive and they're at a decision point about continuing.",
+      "evidence": [
+        "This project has been a labor of love (emphasis on labor!)",
+        "If you've enjoyed these conversations, send us a signal so we know you want us to keep making them"
+      ],
+      "email_open_score": 8,
+      "email_open_reasoning": "The author is explicitly asking for feedback/signals to make a go/no-go decision about continuing this project. They've just completed Vol II and are clearly at an inflection point. A stranger offering concrete feedback, audience insights, or validation would be highly relevant right now.",
+      "persistence_months": 2,
+      "persistence_reasoning": "This is a immediate, time-sensitive decision point. They've just completed Vol II and need to decide soon whether to invest in Vol III. This is a 1-2 month window before they either commit or move on.",
+      "category": "collaboration_need",
+      "source_post": "oliver burkeman is doubling down on the purely human",
+      "source_date": "2025-11-15"
+    }
+  ],
+  "usage": {
+    "input_tokens": 91276,
+    "output_tokens": 976
+  }
+}

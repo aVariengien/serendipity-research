@@ -1,0 +1,32 @@
+# You Have Only X Years To Escape Permanent Moon Ownership
+
+*...*
+
+Published: 2026-01-02
+Source: https://www.astralcodexten.com/p/you-have-only-x-years-to-escape-permanent
+
+---
+
+If you’re not familiar with “X years to escape the permanent underclass”, see [the New Yorker here](https://www.newyorker.com/culture/infinite-scroll/will-ai-trap-you-in-the-permanent-underclass), or the [Laine](https://www.nosetgauge.com/p/capital-agi-and-human-ambition), [Bear](https://philosophybear.substack.com/p/capitalist-strategy-when-capital), and [Trammell/Dwarkesh](https://philiptrammell.substack.com/p/capital-in-the-22nd-century) articles that inspired it.
+
+The “permanent underclass” meme isn’t being spread by poor people - who are already part of the underclass, and generally not worrying too much about its permanence. It’s preying on neurotic well-off people in Silicon Valley, who fret about how they’re just *bourgeois* well-off rather than *future oligarch* well-off, and that only the true oligarchs will have a good time after the Singularity.
+
+Between the vast ocean of total annihilation and the vast continent of infinite post-scarcity, there is, I admit, a tiny shoreline of possibilities that end in oligarch capture. Even if you end up there, you’ll be fine. Dario Amodei has taken the Giving What We Can Pledge ([#43 here](https://www.givingwhatwecan.org/about-us/members#lifetime-members-section)) to give 10% of his wealth to the less fortunate; your worst-case scenario is owning a terraformed moon in one of his galaxies. Now you can stop worrying about the permanent underclass and focus on more important things.
+
+On that tiny shoreline of possible worlds, the ones where the next few years are your last chance to become rich, they’re also your last chance to make a mark on the world (proof: if you could change the world, you could find a way to make people pay you to do it, or to not do it, then become rich). And what a chance! The last few years of the human era will be wild. They’ll be like classical Greece and Rome: a sudden opening up of new possibilities, where the first people to take them will be remembered for millennia to come. What a waste of the privilege of living in Classical Athens to try to become the richest olive merchant or whatever. Even in Roman times, trying to become Crassus would be, well, crass.
+
+In 2014, I wrote [In The Future Everyone Will Be Famous To Fifteen People](https://slatestarcodex.com/2014/10/20/in-the-future-everyone-will-be-famous-to-fifteen-people/). The argument was: suppose humanity ends up occupying millions of galaxies. People will still remember Earth as a special time. The mountainous mass of future historians will press down upon a tiny speck of current people. There’s no reason the colony ships won’t contain flash-drives of the whole 2026-era Internet, so, rather than being limited to a few prominent figures, these historians can study the generation around the Singularity almost in its entirely.
+
+In such a situation, greatness is pathetically easy. A random woman gave Jesus a washcloth to wipe his face on the way to his crucifixion. She is now known as St. Veronica, patroness of laundry workers, and one out of every 2,500 girls in America is named in her honor. She has an annual feast day, approximately one million beautiful Renaissance paintings, a chapel in Jerusalem, and lesser churches all around the world (including one here in San Francisco). The richest olive merchant in Jerusalem that year is long forgotten, but she endures.
+
+St. Veronica isn’t unusual in her charity: any one of us might lend a rag to a person in need. She’s special because she happened to commit her random act of kindness at the crucial - fine, pun *sort of* intended - moment of religious history, when a tiny speck of recorded happenings must support trillions of person-years of later adoration. If you worry about the “permanent underclass” meme, then you already believe we’re not *not* at another crucial moment. I’m not asking you to give up your dreams of owning a bigger moon than everyone else in order to chase a tiny chance of becoming the future’s equivalent of Jesus. I’m suggesting you give them up in order to offer the future a washcloth, and see if it honors your memory.
+
+You have only X years to escape being permanently boring when the weight of galactic humanity descends to scrutinize your life forever. Ten million years from now, do you want transhuman intelligences on a Niven Ring somewhere in Dario Amodei’s supercluster to briefly focus their deific gaze on your legacy and think “Yeah, he spent the whole hinge of history making B2B SAAS products because he was afraid of ‘joining the permanent underclass’, now he has a moon 20% bigger than the rest of us?” Or do you want them to think “She was one of the heroes who arose when the fate of humanity balanced on a knife’s edge, fought against the thousand forms of entropy that could have ended our paradise before it began, helped create a vision of broad-based prosperity that benefitted all humanity, and gets 0.000038501% of the credit for our current happy state. We grant her the rank of Forebear, and the Ancestor Veneration And Simulation Collective has built a megacathedral to her memory three star systems over”?
+
+I’m not trying to push you in any direction, honest. If you get everything totally wrong, too bad, but you’ll still be remembered forever for trying. Even Pontius Pilate has immortality of a sort. Both Eliezer Yudkowsky and Beff Jezos have their page in the textbooks assured. If you’re a well-off Silicon Valley person, you’re already well-placed to join them. So participate in the discourse. Create some art. Donate to a cause you believe in. Make a prediction. Discover something interesting.
+
+Have more fun than anyone has ever had before - after all, history remembers Aristippus! Start a cool group house - after all, history remembers Epicurus! Be extremely hot - history remembers Antinous too! Sell people the lowest-quality copper that has ever been sold, and live forever as a meme six thousand years later!
+
+But don’t waste this amazing opportunity you’ve been given on a vapid attempt to “escape the permanent underclass”.
+
+*[**EDIT:** Further comments and clarifications in item 5 [here](https://www.astralcodexten.com/p/open-thread-415).]*

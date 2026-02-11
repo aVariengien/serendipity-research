@@ -1,0 +1,36 @@
+# OS/editor
+.DS_Store
+
+# Python caches/build
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+**/.venv/
+venv/
+**/venv/
+
+# Local environment/config secrets
+.env
+.env.*
+
+# JS dependencies
+node_modules/
+
+# Generated outputs and larger data artifacts
+econ_model_claudeconnect/results/
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.sqlite
+*.sqlite3

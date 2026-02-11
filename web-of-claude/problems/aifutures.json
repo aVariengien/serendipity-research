@@ -1,0 +1,48 @@
+{
+  "author": "aifutures",
+  "folder": "substack_posts_aifutures",
+  "analyzed_at": "2026-02-10T15:21:59.298520",
+  "posts_analyzed": 20,
+  "posts_truncated": 0,
+  "posts_errored": 0,
+  "problems": [
+    {
+      "problem": "Submit input to Canada's AI strategy consultation on artists/culture",
+      "description": "The author highlights that Canada has opened a call for input on AI strategy and explicitly wants artists and cultural practitioners included in the national AI plan. In 'Canada's AI Strategy Forgot the Artists', they note 'one of the reasons I've been thinking about this again right now is that Canada has opened a call for input on AI strategy' and provide seven specific recommendations.",
+      "evidence": [
+        "Canada has opened a call for input on AI strategy, which is fabulous",
+        "Here are some ideas for you: Create a Canada Generative Arts Fund. Launch a national program to support AI-based art... Establish permanent AI Culture Labs... Build a Cultural Data Commons... Include culture in compute access... Make AI literacy a cultural mission... Recognize cultural data and benefit-sharing... Write creativity into the Pan-Canadian AI Strategy",
+        "What kind of future do we want to build?",
+        "If Canada wants to matter in the next century of technological and cultural change, we need to get busy putting culture at the centre"
+      ],
+      "email_open_score": 8,
+      "email_open_reasoning": "The author is actively responding to an open consultation and has developed detailed, specific recommendations. They've written passionately about this gap and explicitly positioned this as a time-sensitive opportunity. A stranger offering help refining, amplifying, or submitting these ideas would be highly relevant.",
+      "persistence_months": 2,
+      "persistence_reasoning": "Government consultation periods are typically short (weeks to a few months). The urgency is tied to this specific call for input, which will close soon. After submission, this particular problem resolves, though the broader advocacy may continue.",
+      "category": "project_blocker",
+      "source_post": "canadas ai strategy forgot the artists",
+      "source_date": "2025-10-16"
+    },
+    {
+      "problem": "Build coalition/network to advocate for artists in Canada's AI policy",
+      "description": "The author argues passionately that artists must be central to Canada's AI strategy but acknowledges this requires collective action beyond individual voice. In 'Canada's AI Strategy Forgot the Artists', they contrast Canada's approach with Europe's established networks and note 'In the cultural sector we are used to piping up from the back... This time we can't do it that way.'",
+      "evidence": [
+        "In the cultural sector we are used to piping up from the back, addressing our dude-sector overlords with a limp request to be included. This time we can't do it that way - it's not about representation, it's imagination",
+        "We have some of those things in Canada of course but you wouldn't know it looking at the strategy map",
+        "If artists aren't part of that process, the story Canada tells about AI will be narrower, more commercial, and less imaginative than it could be",
+        "This is Part 1 of a two-part series"
+      ],
+      "email_open_score": 7,
+      "email_open_reasoning": "The author is clearly trying to mobilize action and recognizes individual advocacy isn't enough. They're writing a multi-part series on this, suggesting sustained effort. A stranger offering connections to cultural organizations, policy networks, or coalition-building expertise would be directly relevant to amplifying this campaign.",
+      "persistence_months": 6,
+      "persistence_reasoning": "This is framed as a systemic, strategic issue that will require sustained advocacy beyond the immediate consultation. The author is writing a series and positions this as a long-term cultural policy battle, not just a one-time submission. The broader movement-building effort will persist for months.",
+      "category": "collaboration_need",
+      "source_post": "canadas ai strategy forgot the artists",
+      "source_date": "2025-10-16"
+    }
+  ],
+  "usage": {
+    "input_tokens": 86991,
+    "output_tokens": 1487
+  }
+}

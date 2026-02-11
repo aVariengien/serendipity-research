@@ -1,0 +1,17 @@
+Identify the outcome of the negociation. Start by giving 2 sentences of description about the negociation, and cite verbatim the outcome of the negotiation.
+
+Format:
+
+## Outcome of the negociation 
+Outcome Rating: {1-10 number judging how good of a win-win situation this is.}
+
+{1-2 sentence description of the outcome}
+
+## Precise terms of the outcome
+
+{Summaries of what will happen with verbatim quotes from the conversation}
+
+## Summary of the negociation
+
+{1-2 sentence description of the process}
+

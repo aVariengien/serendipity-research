@@ -1,0 +1,13 @@
+{
+  "author": "peterwildeford",
+  "folder": "substack_posts_peterwildeford",
+  "analyzed_at": "2026-02-10T15:22:18.442541",
+  "posts_analyzed": 20,
+  "posts_truncated": 0,
+  "posts_errored": 0,
+  "problems": [],
+  "usage": {
+    "input_tokens": 144673,
+    "output_tokens": 660
+  }
+}

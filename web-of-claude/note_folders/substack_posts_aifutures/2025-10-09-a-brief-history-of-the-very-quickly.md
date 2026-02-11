@@ -1,0 +1,32 @@
+# A Brief History of the Very Quickly
+
+Published: 2025-10-09
+Source: https://aifutures.substack.com/p/the-longest-year
+
+---
+
+Because it’s October in Vancouver, the city is once again alive with the **Signals Festival** and **VIFF (Vancouver International Film Festival)**. Exactly a year ago, [Michael Tippett](https://tippett.org/), Sean Arden, and I teamed up with them to present the [Pacific Futures: AI \& Film event](https://pacific.film/). This was a gathering born from curiosity: At the time, we were asking, *What is this thing called AI Film \& who’s making it?*
+
+Looking back, it’s wild to realize that was only twelve months ago. So mind\-boggling that I have literally doublechecked the calendar, like checked the year.
+
+That event featured some fabulous talks and panels but I guess I’m focused on the screening, which showed artists including **[BORA](https://www.instagram.com/boramurmure/?hl=en), [Dale Williams](https://www.youtube.com/@thereelrobot), [Ethereal Moon](https://x.com/Ethereal_Gwirl), [Sebastian Macchia](https://www.linkedin.com/in/sebastianmacchia/) (Nobody and the Computer), [Mindeye](https://www.instagram.com/__mindeye___), [Manuel Sainsily](https://manu.vision) \& [Will Selviz](https://www.instagram.com/willselviz/?hl=en), [Abel Art](https://abelart.club), [Leilanni Todd](https://www.instagram.com/floam.world/), [Aze Alter](https://www.youtube.com/@AzeAlter), [MetaPuppet](http://www.metapuppet.ai), [Julie Wieland](https://www.juliewieland.com/), [YZA Voku](https://www.instagram.com/yzavoku/?hl=es), [Stacie Ant](https://www.instagram.com/stacieant_/) \& [Guile Twardowski](https://www.instagram.com/guiletwa/?hl=en), [Maria Pokrovskaya](https://www.instagram.com/n.evernow/?hl=en), and [Dave Clark](https://daveclarkcreative.com/projects).** Even then each had a distinct approach, but since that time their contexts and audiences have expanded dramatically.
+
+Not normally one for self\-congratulations, but we rocked it. In 2024, there wasn’t really such a thing as “AI film.” I personally felt I was working inside what can charitably be called a vacuum during the research phase for this curation, and yet the artists we gathered have since exploded outward, “*spawning vast, iridescent webs of crystalline benzene rings and aromatic hexagons, shimmering in puce and violet light, unfolding like a living mandala suspended in fluid space. Macro molecular cinematography, slow camera drift through a luminous chemical landscape, particles refracting through viscous translucent fluid, volumetric lighting, shallow depth of field, bokeh sparkles. Soft organic motion, symmetrical expansion, reflective surfaces glinting under diffuse violet and gold illumination. Abstract, surreal, high\-resolution molecular art film aesthetic*”, (a visual we can now conveniently render in just a few moments if we so desire!).
+
+Take **[Dave Clark](https://daveclarkcreative.com/projects)**, whose short trailer\-style piece in Pacific Film imagined a zombie invasion in Compton. Today, he’s Chief Creative Officer and co\-founder of [Promise](https://www.promisestudios.com/), an AI\-first studio backed by Google’s AI Futures Fund, a16z, and North Road, which is premiering projects at Cannes. Or **[MetaPuppet](https://www.youtube.com/@MetaPuppet)**, also from our lineup, is now Head of Genre at Promise, who is developing a [scary\-looking Dante\-adjacent film](https://www.promisestudios.com/post/concept-exploration-thomas-hate) horror feature.
+
+**[Dale Williams](https://www.linkedin.com/in/dale-williams-18907729/?originalSubdomain=ca)**, whose short *Creature* we screened last year, which was impressive then, is now working on a full\-scale sci\-fi epic about what happens when Earth splits in two and one of the halves drifts into the orbit of a rogue star.
+
+In June, I wrote about how the [GenAI film scene](https://aifutures.substack.com/p/unaddressed-contours-on-the-lot), especially in L.A, is rapidly coalescing into something that echoes Hollywood’s studio system \- but at the same time, at least for the moment, independent creators seem to be living the dream of being able to realize cinematic worlds that once required blockbuster budgets. If that was true then, it’s *hella\-true* now.
+
+Note also the role of AI in concept exploration: these shots are proof of concept, pitch, worldbuilding, and final production all in one (thanks [Julie Weiland](https://www.juliewieland.com/), another participant in our festival, for confirming this observation!) And the growth has also reached the more art\-based practices in AI, such as Veronika Pell ([mindeye](https://www.instagram.com/__mindeye___/?hl=en)), who observes that over the past year the medium has gained credibility and legitimacy that has meant many more professional opportunities. I also want to point out that 3 of the artists \-[Leilanni Todd](https://www.leilannitodd.com/), Veronika Pell (mindeye), and [Julie Weiland](https://www.juliewieland.com/) \-are named on Leonardo.ai’s [2025’s Power List: Top 50 Women AI Artists](https://leonardo.ai/news/50-top-women-ai-artists/) \- congrats to everyone!
+
+[![](https://substackcdn.com/image/fetch/$s_!eAcf!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fdac69f29-c315-427e-b64f-b7b1d5a1efc2_1139x329.png)](https://substackcdn.com/image/fetch/$s_!eAcf!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fdac69f29-c315-427e-b64f-b7b1d5a1efc2_1139x329.png)
+
+##### [Leilanni Todd](https://www.leilannitodd.com/)
+
+Of course a massive reason for how this happened resides in the **technical capabilities** that have evolved in this mad dash. To remind us, when Runway Gen\-3 Alpha was released in Summer 2024 the default video generation length was 4 seconds. This grew throughout the year to 5, then 10, then ultimately you could get to 40 seconds with extensions. **OpenAI’s Sora** leapt from 5\- to 20\-second clips, and then the mother\-of\-all\-gamechangers **[Sora 2](https://openai.com/index/sora-2/)** arrived last week, a delirious buffet of crack and TikTok.
+
+##### Me, playing around with Sora
+
+A year ago, we were counting fingers and seconds, now we’re counting studios and worlds…
