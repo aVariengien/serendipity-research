@@ -34,5 +34,5 @@ econ_model_claudeconnect/results/
 *.pickle
 *.sqlite
 *.sqlite3
-*.json
-*.lock
+**/*.json
+**/*.lock
