@@ -11,14 +11,17 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 import streamlit.components.v1 as components
 from pyvis.network import Network
 
-from run import DEFAULT_SIZES, run_batch
+from run import run_batch
 
 
 DEFAULT_RESULTS_PATH = Path("results/simulation_results.json")
+APP_DEFAULT_SIZES = [5, 10, 20, 40, 80, 160, 320, 640, 1280]
 
 
 @st.cache_data
@@ -33,11 +36,14 @@ def build_run_dataframe(payload: dict) -> pd.DataFrame:
     rows = []
     for run in payload.get("runs", []):
         summary = run.get("summary", {})
+        degree_values = [float(v) for v in run.get("network", {}).get("degrees", {}).values()]
+        mean_degree = float(np.mean(degree_values)) if degree_values else 0.0
         rows.append(
             {
                 "network_size": run["network_size"],
                 "matchmaking": run["matchmaking"],
                 "seed": run["seed"],
+                "mean_degree": mean_degree,
                 "mean_events_per_user_per_week": summary.get(
                     "mean_events_per_user_per_week", 0.0
                 ),
@@ -126,21 +132,122 @@ def build_user_table(run: dict) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("events_per_week", ascending=False)
 
 
+def build_degree_rank_table(run: dict) -> pd.DataFrame:
+    """Return degree rank table for plotting log(degree) vs node order."""
+    degrees = [int(v) for v in run.get("network", {}).get("degrees", {}).values()]
+    if not degrees:
+        return pd.DataFrame(columns=["order", "degree", "log10_degree"])
+
+    degrees_sorted = sorted(degrees, reverse=True)
+    rows = []
+    for idx, degree in enumerate(degrees_sorted, start=1):
+        rows.append(
+            {
+                "order": idx,
+                "degree": degree,
+                "log10_degree": float(np.log10(max(degree, 1))),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def build_resolve_rate_by_degree(run: dict, n_buckets: int = 8) -> pd.DataFrame:
+    """Bucket users by degree and compute resolve rate per bucket.
+
+    Uses actual per-user ``problems_generated`` when available (new runs),
+    falls back to the expected value ``problems_per_day * days`` for older
+    result files that lack this field.
+    """
+    degrees = {int(k): int(v) for k, v in run["network"]["degrees"].items()}
+    days = run["parameters"]["days"]
+    problems_per_day = run["parameters"]["problems_per_day"]
+    fallback_problems = days * problems_per_day
+
+    rows = []
+    for uid_str, events in run["user_events"].items():
+        uid = int(uid_str)
+        problems = events.get("problems_generated")
+        if problems is None:
+            problems = fallback_problems
+        rows.append(
+            {
+                "degree": degrees.get(uid, 0),
+                "as_holder": float(events["as_holder"]),
+                "problems_generated": float(problems),
+            }
+        )
+    if not rows:
+        return pd.DataFrame(
+            columns=["degree_bucket", "node_count", "resolve_rate"]
+        )
+
+    df = pd.DataFrame(rows)
+    deg_min = int(df["degree"].min())
+    deg_max = int(df["degree"].max())
+
+    if deg_max == deg_min:
+        boundaries = [deg_min, deg_max + 1]
+    else:
+        boundaries = np.linspace(deg_min, deg_max + 1, n_buckets + 1).astype(int)
+        boundaries = sorted(set(boundaries))
+
+    labels = []
+    for i in range(len(boundaries) - 1):
+        lo = boundaries[i]
+        hi = boundaries[i + 1] - 1
+        labels.append(f"{lo}-{hi}" if lo != hi else str(lo))
+
+    df["bucket"] = pd.cut(
+        df["degree"],
+        bins=[float(b) for b in boundaries],
+        labels=labels,
+        include_lowest=True,
+        right=False,
+    )
+
+    agg = df.groupby("bucket", observed=False).agg(
+        node_count=("degree", "size"),
+        solved_sum=("as_holder", "sum"),
+        problems_sum=("problems_generated", "sum"),
+    )
+    agg["resolve_rate"] = np.where(
+        agg["problems_sum"] > 0, agg["solved_sum"] / agg["problems_sum"], 0.0
+    )
+    agg = agg.reset_index().rename(columns={"bucket": "degree_bucket"})
+    return agg
+
+
 def main() -> None:
     st.set_page_config(page_title="Social Matching Simulation", layout="wide")
     st.title("Social Network Problem-Opportunity Matching")
-
-    st.sidebar.header("Data")
-    path = st.sidebar.text_input("Results JSON path", value=str(DEFAULT_RESULTS_PATH))
-    output_path = Path(path)
+    output_path = DEFAULT_RESULTS_PATH
 
     st.sidebar.header("Simulation Controls")
-    sim_name = st.sidebar.text_input("Simulation name", value="baseline")
+    sim_name = st.sidebar.text_input("Simulation name", value="Top 50 CA users Twitter base rate")
     sim_problems_per_day_text = st.sidebar.text_input(
-        "Problems per user per day (pb/day, mean)", value="3"
+        "Problems per user per day (pb/day, mean)", value="0.7"
     )
     sim_match_probability_text = st.sidebar.text_input(
-        "Solve probability per candidate", value="0.01"
+        "Solve probability per candidate", value="0.000051"
+    )
+    sim_small_network_degree_percent = st.sidebar.slider(
+        "Small-network degree percent (P)",
+        min_value=1,
+        max_value=100,
+        value=20,
+        step=1,
+        help="Target average degree starts as int(n * P/100).",
+    )
+    sim_large_network_degree_cap = st.sidebar.slider(
+        "Large-network avg degree cap (K)",
+        min_value=5,
+        max_value=100,
+        value=20,
+        step=1,
+        help="When int(n * P/100) exceeds K, target degree is capped at K.",
+    )
+    st.sidebar.caption(
+        "Per network size n: target average degree = min(int(n * P/100), K)."
     )
     with st.sidebar.expander("Advanced run settings"):
         sim_days_text = st.text_input("Days", value="28")
@@ -148,18 +255,26 @@ def main() -> None:
             "Seeds per configuration",
             min_value=1,
             max_value=100,
-            value=10,
+            value=1,
             step=1,
         )
         sim_sizes_text = st.text_input(
             "Network sizes (comma-separated, max 2000)",
-            value=", ".join(str(x) for x in DEFAULT_SIZES),
+            value=", ".join(str(x) for x in APP_DEFAULT_SIZES),
         )
         sim_base_seed = st.number_input(
             "Base seed", min_value=0, max_value=2**31 - 1, value=42, step=1
         )
+        sim_disable_triadic_closure = st.checkbox(
+            "Disable triadic closure",
+            value=False,
+            help="If enabled, skips friend-of-friend edge additions in large-network generation.",
+        )
 
-    run_clicked = st.sidebar.button("Run simulation from app", type="primary")
+    st.markdown(
+        "Run a simulation and explore the network and outcome charts."
+    )
+    run_clicked = st.button("Run simulation", type="primary")
     if run_clicked:
         errors: list[str] = []
         sim_name_clean = sim_name.strip() or "unnamed_simulation"
@@ -210,30 +325,44 @@ def main() -> None:
             for error in errors:
                 st.sidebar.error(error)
         else:
-            with st.spinner("Running simulations..."):
-                payload = run_batch(
-                    days=int(sim_days),
-                    problems_per_day=float(sim_problems_per_day),
-                    match_probability=float(sim_match_probability),
-                    matchmaker_credit=0.5,
-                    seeds_per_config=int(sim_seeds_per_config),
-                    sizes=[int(x) for x in sim_sizes],
-                    base_seed=int(sim_base_seed),
+            progress_bar = st.progress(0, text="Running simulations...")
+
+            def _update_progress(completed: int, total: int, size: int) -> None:
+                frac = completed / max(total, 1)
+                progress_bar.progress(
+                    frac, text=f"Running simulations... n={size}  ({completed}/{total})"
                 )
-                payload["simulation_name"] = sim_name_clean
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+            payload = run_batch(
+                days=int(sim_days),
+                problems_per_day=float(sim_problems_per_day),
+                match_probability=float(sim_match_probability),
+                matchmaker_credit=0.5,
+                seeds_per_config=int(sim_seeds_per_config),
+                sizes=[int(x) for x in sim_sizes],
+                base_seed=int(sim_base_seed),
+                small_network_degree_fraction=(
+                    float(sim_small_network_degree_percent) / 100.0
+                ),
+                max_target_avg_degree=float(sim_large_network_degree_cap),
+                enable_triadic_closure=not sim_disable_triadic_closure,
+                progress_callback=_update_progress,
+            )
+            progress_bar.empty()
+            payload["simulation_name"] = sim_name_clean
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
             load_results.clear()
             st.sidebar.success(f"'{sim_name_clean}' written to {output_path}")
             st.rerun()
 
+    payload = None
     try:
         payload = load_results(str(output_path))
-    except FileNotFoundError as exc:
-        st.error(str(exc))
+    except FileNotFoundError:
         st.info(
-            "Use the sidebar button 'Run simulation from app' or run "
-            "`uv run python run.py`."
+            "Welcome! "
+            "Configure your settings in the sidebar and click 'Run simulation' to begin."
         )
         return
 
@@ -248,7 +377,9 @@ def main() -> None:
     st.sidebar.header("Filters")
     sizes = sorted(runs_df["network_size"].unique().tolist())
     match_modes = [False, True]
-    selected_size = st.sidebar.selectbox("Network size", options=sizes, index=0)
+    selected_size = st.sidebar.selectbox(
+        "Network size", options=sizes, index=max(len(sizes) - 1, 0)
+    )
     selected_matchmaking = st.sidebar.selectbox(
         "Matchmaking",
         options=match_modes,
@@ -304,6 +435,24 @@ def main() -> None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    st.subheader("Observed Mean Degree by Network Size")
+    degree_grouped = (
+        runs_df.groupby("network_size")["mean_degree"].agg(["mean", "std"]).reset_index()
+    )
+    degree_fig = px.line(
+        degree_grouped,
+        x="network_size",
+        y="mean",
+        error_y="std",
+        markers=True,
+        labels={
+            "network_size": "Network size",
+            "mean": "Observed mean degree",
+            "std": "Std dev across runs",
+        },
+    )
+    st.plotly_chart(degree_fig, use_container_width=True)
+
     col1, col2 = st.columns(2)
     with col1:
         hist = px.histogram(
@@ -335,7 +484,11 @@ def main() -> None:
         return
 
     st.subheader("Selected Run Graph Heatmap")
-    render_pyvis_graph(selected_run)
+    n_edges = len(selected_run.get("network", {}).get("edges", []))
+    if n_edges > 5000:
+        st.info(f"Network too large ({n_edges:,} edges). Network visualisation not shown.")
+    else:
+        render_pyvis_graph(selected_run)
 
     user_df = build_user_table(selected_run)
 
@@ -348,6 +501,61 @@ def main() -> None:
         title="Degree vs events per week",
     )
     st.plotly_chart(scatter, use_container_width=True)
+
+    st.subheader("Resolve Rate & Node Count by Degree Bucket")
+    resolve_df = build_resolve_rate_by_degree(selected_run)
+    resolve_fig = make_subplots(specs=[[{"secondary_y": True}]])
+    resolve_fig.add_trace(
+        go.Bar(
+            x=resolve_df["degree_bucket"],
+            y=resolve_df["node_count"],
+            name="Node count",
+            marker_color="#8EC5FF",
+            opacity=0.8,
+        ),
+        secondary_y=False,
+    )
+    resolve_fig.add_trace(
+        go.Scatter(
+            x=resolve_df["degree_bucket"],
+            y=resolve_df["resolve_rate"],
+            name="Resolve rate",
+            mode="lines+markers",
+            marker=dict(color="#2ca02c", size=8),
+            line=dict(color="#2ca02c", width=2),
+        ),
+        secondary_y=True,
+    )
+    resolve_fig.update_layout(
+        xaxis_title="Degree bucket",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    resolve_fig.update_yaxes(
+        title_text="Number of nodes", showgrid=False, secondary_y=False
+    )
+    resolve_fig.update_yaxes(
+        title_text="Resolve rate",
+        tickformat=".4%",
+        showgrid=False,
+        secondary_y=True,
+    )
+    st.plotly_chart(resolve_fig, use_container_width=True)
+
+    st.subheader("Degree Distribution (log-log)")
+    degree_rank_df = build_degree_rank_table(selected_run)
+    degree_rank_fig = px.scatter(
+        degree_rank_df,
+        x="order",
+        y="degree",
+        hover_data=["degree"],
+        log_x=True,
+        log_y=True,
+        labels={
+            "order": "Rank (log scale)",
+            "degree": "Degree (log scale)",
+        },
+    )
+    st.plotly_chart(degree_rank_fig, use_container_width=True)
 
     st.dataframe(user_df, use_container_width=True)
 

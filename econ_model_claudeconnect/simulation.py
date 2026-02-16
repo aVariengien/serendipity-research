@@ -13,6 +13,7 @@ class UserEvents:
     as_holder: float = 0.0
     as_solver: float = 0.0
     as_matchmaker: float = 0.0
+    problems_generated: int = 0
 
     @property
     def total(self) -> float:
@@ -62,6 +63,7 @@ class SimulationResult:
                 "as_solver": ue.as_solver,
                 "as_matchmaker": ue.as_matchmaker,
                 "total": ue.total,
+                "problems_generated": ue.problems_generated,
             }
 
         per_week = []
@@ -140,6 +142,8 @@ def run_simulation(
             daily_problem_count = base_problems
             if rng.random() < fractional_remainder:
                 daily_problem_count += 1
+
+            user_events[user_a].problems_generated += daily_problem_count
 
             for _problem in range(daily_problem_count):
                 total_problems += 1

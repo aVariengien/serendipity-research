@@ -13,6 +13,33 @@ import numpy as np
 import networkx as nx
 
 
+def _dual_ba_params_for_target_degree(
+    n: int,
+    target_avg_degree: float,
+    *,
+    low_anchor: int = 1,
+) -> tuple[int, int, float]:
+    """Pick (m1, m2, p) for dual-BA to approximate a target mean degree.
+
+    We keep a low attachment anchor (m1=1) to preserve hubbiness and solve
+    p given a chosen m2. The hubbiness gap is set as g ~= k / 10.
+    """
+    k = float(np.clip(target_avg_degree, 2.0, float(max(2, n - 1))))
+    m1 = max(1, min(low_anchor, n - 2))
+
+    # Expected new edges per node is mu = k / 2.
+    mu = k / 2.0
+    g = max(1.0, k / 10.0)
+    m2 = int(round(mu + g / 2.0))
+    m2 = max(m1 + 1, min(m2, n - 1))
+
+    # Solve p from: mu = p*m1 + (1-p)*m2.
+    denom = float(m1 - m2)
+    p = 0.0 if denom == 0 else (mu - m2) / denom
+    p = float(np.clip(p, 0.0, 1.0))
+    return m1, m2, p
+
+
 def _add_triadic_closure(
     G: nx.Graph, rng: np.random.Generator, triad_prob: float = 0.15
 ) -> nx.Graph:
@@ -47,7 +74,13 @@ def _ensure_connected(G: nx.Graph, rng: np.random.Generator) -> nx.Graph:
     return G
 
 
-def generate_network(n: int, seed: int | None = None) -> nx.Graph:
+def generate_network(
+    n: int,
+    seed: int | None = None,
+    *,
+    target_avg_degree: float | None = None,
+    enable_triadic_closure: bool = True,
+) -> nx.Graph:
     """Generate a social network with n users and a power-law degree distribution.
 
     Parameters
@@ -70,16 +103,25 @@ def generate_network(n: int, seed: int | None = None) -> nx.Graph:
         G = nx.complete_graph(n)
     elif n < 15:
         # Small network: simple preferential attachment.
-        m = min(2, n - 1)
+        if target_avg_degree is None:
+            m = min(2, n - 1)
+        else:
+            # BA mean degree ~= 2m.
+            m = int(round(float(target_avg_degree) / 2.0))
+            m = max(1, min(m, n - 1))
         G = nx.barabasi_albert_graph(n, m, seed=nx_seed)
     else:
         # Larger network: dual attachment keeps heterogeneity while reducing
         # chain-like structures from degree-sequence pairing.
-        m1 = 1
-        m2 = min(5, n - 1)
-        p = 0.8
+        if target_avg_degree is None:
+            m1 = 1
+            m2 = min(5, n - 1)
+            p = 0.8
+        else:
+            m1, m2, p = _dual_ba_params_for_target_degree(n, target_avg_degree)
         G = nx.dual_barabasi_albert_graph(n, m1, m2, p, seed=nx_seed)
-        G = _add_triadic_closure(G, rng, triad_prob=0.15)
+        if enable_triadic_closure:
+            G = _add_triadic_closure(G, rng, triad_prob=0.15)
 
     G = _ensure_connected(G, rng)
 

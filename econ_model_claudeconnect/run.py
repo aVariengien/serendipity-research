@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from network import generate_network
 from simulation import run_simulation
 
 
-DEFAULT_SIZES = [5, 10, 20, 40, 80, 160, 320, 640, 1280]
+DEFAULT_SIZES = [5, 10, 20, 40, 80, 160, 320]
 
 
 def aggregate_runs(runs: list[dict]) -> list[dict]:
@@ -69,6 +70,29 @@ def parse_args() -> argparse.Namespace:
         default=42,
         help="Base random seed to generate per-run seeds",
     )
+    parser.add_argument(
+        "--target-avg-degree",
+        type=float,
+        default=None,
+        help="Optional global target average degree for generated networks",
+    )
+    parser.add_argument(
+        "--small-network-degree-fraction",
+        type=float,
+        default=None,
+        help="If set with --max-target-avg-degree, use target=min(int(n*fraction), max)",
+    )
+    parser.add_argument(
+        "--max-target-avg-degree",
+        type=float,
+        default=None,
+        help="Cap K used with --small-network-degree-fraction",
+    )
+    parser.add_argument(
+        "--disable-triadic-closure",
+        action="store_true",
+        help="Disable friend-of-friend closure links during graph generation",
+    )
     return parser.parse_args()
 
 
@@ -81,17 +105,53 @@ def run_batch(
     seeds_per_config: int = 10,
     sizes: list[int] | None = None,
     base_seed: int = 42,
+    target_avg_degree: float | None = None,
+    small_network_degree_fraction: float | None = None,
+    max_target_avg_degree: float | None = None,
+    enable_triadic_closure: bool = True,
+    progress_callback: Callable[[int, int, int], None] | None = None,
 ) -> dict:
-    """Run all configurations and return JSON-ready payload."""
+    """Run all configurations and return JSON-ready payload.
+
+    Parameters
+    ----------
+    progress_callback : callable or None
+        If provided, called after each individual run with
+        ``(completed, total, network_size)``.
+    """
     sizes = sizes or DEFAULT_SIZES
     rng = np.random.default_rng(base_seed)
     runs: list[dict] = []
 
-    for network_size in sizes:
+    run_sizes_desc = sorted(sizes, reverse=True)
+    total_runs = len(sizes) * 2 * seeds_per_config
+    completed = 0
+
+    for network_size in run_sizes_desc:
         for matchmaking in (False, True):
             for _ in range(seeds_per_config):
                 seed = int(rng.integers(0, 2**31 - 1))
-                graph = generate_network(network_size, seed=seed)
+                per_size_target_avg_degree: float | None
+                if (
+                    small_network_degree_fraction is not None
+                    and max_target_avg_degree is not None
+                ):
+                    per_size_target_avg_degree = float(
+                        min(
+                            int(network_size * small_network_degree_fraction),
+                            max_target_avg_degree,
+                        )
+                    )
+                    per_size_target_avg_degree = max(2.0, per_size_target_avg_degree)
+                else:
+                    per_size_target_avg_degree = target_avg_degree
+
+                graph = generate_network(
+                    network_size,
+                    seed=seed,
+                    target_avg_degree=per_size_target_avg_degree,
+                    enable_triadic_closure=enable_triadic_closure,
+                )
                 result = run_simulation(
                     graph=graph,
                     days=days,
@@ -107,6 +167,10 @@ def run_batch(
                 run_record["seed"] = seed
                 runs.append(run_record)
 
+                completed += 1
+                if progress_callback is not None:
+                    progress_callback(completed, total_runs, network_size)
+
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "config": {
@@ -118,6 +182,10 @@ def run_batch(
             "seeds_per_config": seeds_per_config,
             "sizes": sizes,
             "base_seed": base_seed,
+            "target_avg_degree": target_avg_degree,
+            "small_network_degree_fraction": small_network_degree_fraction,
+            "max_target_avg_degree": max_target_avg_degree,
+            "enable_triadic_closure": enable_triadic_closure,
         },
         "aggregates": aggregate_runs(runs),
         "runs": runs,
@@ -137,6 +205,10 @@ def main() -> None:
         seeds_per_config=args.seeds_per_config,
         sizes=args.sizes,
         base_seed=args.base_seed,
+        target_avg_degree=args.target_avg_degree,
+        small_network_degree_fraction=args.small_network_degree_fraction,
+        max_target_avg_degree=args.max_target_avg_degree,
+        enable_triadic_closure=not args.disable_triadic_closure,
     )
 
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
