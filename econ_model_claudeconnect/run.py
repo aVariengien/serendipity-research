@@ -13,7 +13,7 @@ from network import generate_network
 from simulation import run_simulation
 
 
-DEFAULT_SIZES = [5, 10, 20, 40, 80, 160, 320]
+DEFAULT_SIZES = [5, 10, 20, 40, 80, 160, 320, 640, 1280]
 
 
 def aggregate_runs(runs: list[dict]) -> list[dict]:
@@ -46,7 +46,7 @@ def aggregate_runs(runs: list[dict]) -> list[dict]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run social matching simulations.")
     parser.add_argument("--days", type=int, default=28)
-    parser.add_argument("--problems-per-day", type=int, default=3)
+    parser.add_argument("--problems-per-day", type=float, default=3.0)
     parser.add_argument("--match-probability", type=float, default=0.01)
     parser.add_argument("--matchmaker-credit", type=float, default=0.5)
     parser.add_argument("--seeds-per-config", type=int, default=10)
@@ -75,7 +75,7 @@ def parse_args() -> argparse.Namespace:
 def run_batch(
     *,
     days: int = 28,
-    problems_per_day: int = 3,
+    problems_per_day: float = 3.0,
     match_probability: float = 0.01,
     matchmaker_credit: float = 0.5,
     seeds_per_config: int = 10,
@@ -112,6 +112,7 @@ def run_batch(
         "config": {
             "days": days,
             "problems_per_day": problems_per_day,
+            "problems_per_day_sampling": "stochastic_rounding_floor_ceil",
             "match_probability": match_probability,
             "matchmaker_credit": matchmaker_credit,
             "seeds_per_config": seeds_per_config,

@@ -25,7 +25,7 @@ class SimulationResult:
 
     n_users: int
     days: int
-    problems_per_day: int
+    problems_per_day: float
     match_probability: float
     matchmaking: bool
     matchmaker_credit: float
@@ -107,7 +107,7 @@ class SimulationResult:
 def run_simulation(
     graph: nx.Graph,
     days: int = 28,
-    problems_per_day: int = 3,
+    problems_per_day: float = 3.0,
     match_probability: float = 0.01,
     matchmaking: bool = False,
     matchmaker_credit: float = 0.5,
@@ -119,6 +119,9 @@ def run_simulation(
     1) direct friend matching
     2) optional friend-of-friend matchmaking if still unsolved
     """
+    if problems_per_day < 0:
+        raise ValueError("problems_per_day must be >= 0")
+
     rng = np.random.default_rng(seed)
     nodes = list(graph.nodes())
 
@@ -129,9 +132,16 @@ def run_simulation(
     total_problems = 0
     total_solved = 0
 
+    base_problems = int(np.floor(problems_per_day))
+    fractional_remainder = float(problems_per_day - base_problems)
+
     for _day in range(days):
         for user_a in nodes:
-            for _problem in range(problems_per_day):
+            daily_problem_count = base_problems
+            if rng.random() < fractional_remainder:
+                daily_problem_count += 1
+
+            for _problem in range(daily_problem_count):
                 total_problems += 1
                 solved = False
 

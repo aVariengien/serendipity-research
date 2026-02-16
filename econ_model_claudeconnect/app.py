@@ -135,23 +135,15 @@ def main() -> None:
     output_path = Path(path)
 
     st.sidebar.header("Simulation Controls")
-    sim_problems_per_day = st.sidebar.number_input(
-        "Problems per user per day",
-        min_value=1,
-        max_value=20,
-        value=3,
-        step=1,
+    sim_name = st.sidebar.text_input("Simulation name", value="baseline")
+    sim_problems_per_day_text = st.sidebar.text_input(
+        "Problems per user per day (pb/day, mean)", value="3"
     )
-    sim_match_probability = st.sidebar.slider(
-        "Solve probability per candidate",
-        min_value=0.001,
-        max_value=0.200,
-        value=0.010,
-        step=0.001,
-        format="%.3f",
+    sim_match_probability_text = st.sidebar.text_input(
+        "Solve probability per candidate", value="0.01"
     )
     with st.sidebar.expander("Advanced run settings"):
-        sim_days = st.number_input("Days", min_value=7, max_value=365, value=28, step=7)
+        sim_days_text = st.text_input("Days", value="28")
         sim_seeds_per_config = st.number_input(
             "Seeds per configuration",
             min_value=1,
@@ -159,10 +151,9 @@ def main() -> None:
             value=10,
             step=1,
         )
-        sim_sizes = st.multiselect(
-            "Network sizes",
-            options=DEFAULT_SIZES,
-            default=DEFAULT_SIZES,
+        sim_sizes_text = st.text_input(
+            "Network sizes (comma-separated, max 2000)",
+            value=", ".join(str(x) for x in DEFAULT_SIZES),
         )
         sim_base_seed = st.number_input(
             "Base seed", min_value=0, max_value=2**31 - 1, value=42, step=1
@@ -170,23 +161,70 @@ def main() -> None:
 
     run_clicked = st.sidebar.button("Run simulation from app", type="primary")
     if run_clicked:
-        if not sim_sizes:
-            st.sidebar.error("Select at least one network size.")
+        errors: list[str] = []
+        sim_name_clean = sim_name.strip() or "unnamed_simulation"
+
+        try:
+            sim_problems_per_day = float(sim_problems_per_day_text.strip())
+            if sim_problems_per_day < 0:
+                errors.append("Problems per user per day must be >= 0.")
+        except ValueError:
+            errors.append("Problems per user per day must be a number.")
+
+        try:
+            sim_days = int(sim_days_text.strip())
+            if sim_days < 1:
+                errors.append("Days must be >= 1.")
+        except ValueError:
+            errors.append("Days must be an integer.")
+
+        try:
+            sim_match_probability = float(sim_match_probability_text.strip())
+            if not 0.0 <= sim_match_probability <= 1.0:
+                errors.append("Solve probability per candidate must be between 0 and 1.")
+        except ValueError:
+            errors.append("Solve probability per candidate must be a number.")
+
+        sim_sizes: list[int] = []
+        raw_sizes = [token.strip() for token in sim_sizes_text.split(",") if token.strip()]
+        if not raw_sizes:
+            errors.append("Provide at least one network size.")
+        else:
+            for token in raw_sizes:
+                try:
+                    size = int(token)
+                except ValueError:
+                    errors.append(f"Invalid network size '{token}' (must be an integer).")
+                    continue
+
+                if size < 2 or size > 2000:
+                    errors.append(f"Network size {size} is out of range (2..2000).")
+                    continue
+
+                sim_sizes.append(size)
+
+            if sim_sizes:
+                sim_sizes = sorted(set(sim_sizes))
+
+        if errors:
+            for error in errors:
+                st.sidebar.error(error)
         else:
             with st.spinner("Running simulations..."):
                 payload = run_batch(
                     days=int(sim_days),
-                    problems_per_day=int(sim_problems_per_day),
+                    problems_per_day=float(sim_problems_per_day),
                     match_probability=float(sim_match_probability),
                     matchmaker_credit=0.5,
                     seeds_per_config=int(sim_seeds_per_config),
                     sizes=[int(x) for x in sim_sizes],
                     base_seed=int(sim_base_seed),
                 )
+                payload["simulation_name"] = sim_name_clean
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
             load_results.clear()
-            st.sidebar.success(f"Results written to {output_path}")
+            st.sidebar.success(f"'{sim_name_clean}' written to {output_path}")
             st.rerun()
 
     try:
@@ -203,6 +241,9 @@ def main() -> None:
     if runs_df.empty:
         st.warning("No runs found in the results file.")
         return
+
+    sim_header = payload.get("simulation_name", "Unnamed simulation")
+    st.header(f"Simulation: {sim_header}")
 
     st.sidebar.header("Filters")
     sizes = sorted(runs_df["network_size"].unique().tolist())
@@ -233,14 +274,19 @@ def main() -> None:
             break
 
     st.subheader("Critical Mass Analysis")
+    mode_labels = {False: "No matchmaking", True: "With matchmaking"}
+    mode_order = ["No matchmaking", "With matchmaking"]
+    mode_colors = {
+        "No matchmaking": "#8EC5FF",  # light blue
+        "With matchmaking": "#0B3D91",  # dark blue
+    }
     grouped = (
         runs_df.groupby(["network_size", "matchmaking"])["mean_events_per_user_per_week"]
         .agg(["mean", "std"])
         .reset_index()
     )
-    grouped["mode"] = grouped["matchmaking"].map(
-        {False: "No matchmaking", True: "With matchmaking"}
-    )
+    grouped["mode"] = grouped["matchmaking"].map(mode_labels)
+    runs_df["mode"] = runs_df["matchmaking"].map(mode_labels)
 
     fig = px.line(
         grouped,
@@ -248,13 +294,14 @@ def main() -> None:
         y="mean",
         color="mode",
         markers=True,
+        category_orders={"mode": mode_order},
+        color_discrete_map=mode_colors,
         labels={
             "network_size": "Network size",
             "mean": "Mean events/user/week",
             "mode": "Mode",
         },
     )
-    fig.add_hline(y=1.0, line_dash="dash", annotation_text="Target: 1 event/user/week")
     st.plotly_chart(fig, use_container_width=True)
 
     col1, col2 = st.columns(2)
@@ -262,10 +309,10 @@ def main() -> None:
         hist = px.histogram(
             runs_df,
             x="mean_events_per_user_per_week",
-            color=runs_df["matchmaking"].map(
-                {False: "No matchmaking", True: "With matchmaking"}
-            ),
+            color="mode",
             barmode="overlay",
+            category_orders={"mode": mode_order},
+            color_discrete_map=mode_colors,
             labels={"color": "Mode"},
             title="Distribution of run-level event outcomes",
         )
@@ -273,13 +320,11 @@ def main() -> None:
     with col2:
         box = px.box(
             runs_df,
-            x=runs_df["matchmaking"].map(
-                {False: "No matchmaking", True: "With matchmaking"}
-            ),
+            x="mode",
             y="mean_events_per_user_per_week",
-            color=runs_df["matchmaking"].map(
-                {False: "No matchmaking", True: "With matchmaking"}
-            ),
+            color="mode",
+            category_orders={"mode": mode_order},
+            color_discrete_map=mode_colors,
             labels={"x": "Mode", "y": "Mean events/user/week", "color": "Mode"},
             title="Run-level outcome spread by mode",
         )
