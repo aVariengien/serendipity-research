@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 from typing import Any, cast
@@ -20,16 +19,7 @@ from pyvis.network import Network
 from run import run_batch
 
 
-DEFAULT_RESULTS_PATH = Path("results/simulation_results.json")
 APP_DEFAULT_SIZES = [5, 10, 20, 40, 80, 160, 320, 640, 1280]
-
-
-@st.cache_data
-def load_results(path: str) -> dict:
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Results file not found: {path}")
-    return json.loads(p.read_text(encoding="utf-8"))
 
 
 def build_run_dataframe(payload: dict) -> pd.DataFrame:
@@ -220,7 +210,6 @@ def build_resolve_rate_by_degree(run: dict, n_buckets: int = 8) -> pd.DataFrame:
 def main() -> None:
     st.set_page_config(page_title="Social Matching Simulation", layout="wide")
     st.title("Social Network Problem-Opportunity Matching")
-    output_path = DEFAULT_RESULTS_PATH
 
     st.sidebar.header("Simulation Controls")
     sim_name = st.sidebar.text_input("Simulation name", value="Top 50 CA users Twitter base rate")
@@ -350,16 +339,12 @@ def main() -> None:
             )
             progress_bar.empty()
             payload["simulation_name"] = sim_name_clean
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-            load_results.clear()
-            st.sidebar.success(f"'{sim_name_clean}' written to {output_path}")
+            st.session_state["simulation_payload"] = payload
+            st.sidebar.success(f"Simulation '{sim_name_clean}' complete!")
             st.rerun()
 
-    payload = None
-    try:
-        payload = load_results(str(output_path))
-    except FileNotFoundError:
+    payload = st.session_state.get("simulation_payload")
+    if payload is None:
         st.info(
             "Welcome! "
             "Configure your settings in the sidebar and click 'Run simulation' to begin."
