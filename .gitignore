@@ -35,4 +35,5 @@ econ_model_claudeconnect/results/
 *.sqlite
 *.sqlite3
 **/*.json
+!econ_model_claudeconnect/default_run.json
 **/*.lock

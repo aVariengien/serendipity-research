@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Any, cast
@@ -20,6 +21,7 @@ from run import run_batch
 
 
 APP_DEFAULT_SIZES = [5, 10, 20, 40, 80, 160, 320, 640, 1280]
+DEFAULT_RUN_PATH = Path(__file__).parent / "default_run.json"
 
 
 def build_run_dataframe(payload: dict) -> pd.DataFrame:
@@ -345,11 +347,19 @@ def main() -> None:
 
     payload = st.session_state.get("simulation_payload")
     if payload is None:
-        st.info(
-            "Welcome! "
-            "Configure your settings in the sidebar and click 'Run simulation' to begin."
-        )
-        return
+        if DEFAULT_RUN_PATH.exists():
+            payload = json.loads(DEFAULT_RUN_PATH.read_text(encoding="utf-8"))
+            st.session_state["simulation_payload"] = payload
+            st.info(
+                "Showing pre-computed default results. "
+                "Adjust settings in the sidebar and click **Run simulation** to run your own."
+            )
+        else:
+            st.info(
+                "Welcome! "
+                "Configure your settings in the sidebar and click 'Run simulation' to begin."
+            )
+            return
 
     runs_df = build_run_dataframe(payload)
     if runs_df.empty:
