@@ -30,6 +30,7 @@ def build_run_dataframe(payload: dict) -> pd.DataFrame:
         summary = run.get("summary", {})
         degree_values = [float(v) for v in run.get("network", {}).get("degrees", {}).values()]
         mean_degree = float(np.mean(degree_values)) if degree_values else 0.0
+        days = run.get("parameters", {}).get("days", 28)
         rows.append(
             {
                 "network_size": run["network_size"],
@@ -42,6 +43,7 @@ def build_run_dataframe(payload: dict) -> pd.DataFrame:
                 "solve_rate": summary.get("solve_rate", 0.0),
                 "total_problems": summary.get("total_problems", 0),
                 "total_solved": summary.get("total_solved", 0),
+                "days": days,
             }
         )
     return pd.DataFrame(rows)
@@ -209,6 +211,37 @@ def build_resolve_rate_by_degree(run: dict, n_buckets: int = 8) -> pd.DataFrame:
     return agg
 
 
+def compute_average_friends_of_friends(run: dict) -> float:
+    """Return mean unique two-hop neighbors per user.
+
+    Excludes the user itself and direct friends.
+    """
+    degrees = {int(k): int(v) for k, v in run.get("network", {}).get("degrees", {}).items()}
+    adjacency: dict[int, set[int]] = {uid: set() for uid in degrees}
+
+    for edge in run.get("network", {}).get("edges", []):
+        if len(edge) != 2:
+            continue
+        u = int(edge[0])
+        v = int(edge[1])
+        adjacency.setdefault(u, set()).add(v)
+        adjacency.setdefault(v, set()).add(u)
+
+    if not adjacency:
+        return 0.0
+
+    fof_counts: list[int] = []
+    for user_id, direct_friends in adjacency.items():
+        fof_candidates: set[int] = set()
+        for friend_id in direct_friends:
+            fof_candidates.update(adjacency.get(friend_id, set()))
+        fof_candidates.discard(user_id)
+        fof_candidates.difference_update(direct_friends)
+        fof_counts.append(len(fof_candidates))
+
+    return float(np.mean(fof_counts)) if fof_counts else 0.0
+
+
 def main() -> None:
     st.set_page_config(page_title="Social Matching Simulation", layout="wide")
     st.title("Social Network Problem-Opportunity Matching")
@@ -218,8 +251,8 @@ def main() -> None:
     sim_problems_per_day_text = st.sidebar.text_input(
         "Problems per user per day (pb/day, mean)", value="0.7"
     )
-    sim_match_probability_text = st.sidebar.text_input(
-        "Solve probability per candidate", value="0.000051"
+    sim_views_before_50pct_text = st.sidebar.text_input(
+        "Views before 50% resolution rate", value="19608"
     )
     sim_small_network_degree_percent = st.sidebar.slider(
         "Small-network degree percent (P)",
@@ -262,6 +295,19 @@ def main() -> None:
             help="If enabled, skips friend-of-friend edge additions in large-network generation.",
         )
 
+    st.sidebar.header("Economics")
+    bounty_per_problem_text = st.sidebar.text_input(
+        "Average bounty per problem ($)",
+        value="100",
+        help="Dollar amount spent each time a problem is solved.",
+    )
+    try:
+        bounty_per_problem = float(bounty_per_problem_text.strip())
+        if bounty_per_problem < 0:
+            bounty_per_problem = 0.0
+    except ValueError:
+        bounty_per_problem = 0.0
+
     st.markdown(
         "Run a simulation and explore the network and outcome charts."
     )
@@ -285,11 +331,13 @@ def main() -> None:
             errors.append("Days must be an integer.")
 
         try:
-            sim_match_probability = float(sim_match_probability_text.strip())
-            if not 0.0 <= sim_match_probability <= 1.0:
-                errors.append("Solve probability per candidate must be between 0 and 1.")
+            sim_views_before_50pct = float(sim_views_before_50pct_text.strip())
+            if sim_views_before_50pct <= 0.0:
+                errors.append("Views before 50% resolution rate must be > 0.")
+            else:
+                sim_match_probability = 1.0 / sim_views_before_50pct
         except ValueError:
-            errors.append("Solve probability per candidate must be a number.")
+            errors.append("Views before 50% resolution rate must be a number.")
 
         sim_sizes: list[int] = []
         raw_sizes = [token.strip() for token in sim_sizes_text.split(",") if token.strip()]
@@ -429,6 +477,66 @@ def main() -> None:
         },
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Total Bounty Spent per Month vs Number of Users")
+    bounty_grouped = (
+        runs_df.groupby(["network_size", "matchmaking"])
+        .apply(lambda g: pd.Series({
+            "mean_dollars_per_month": (
+                (g["total_solved"] * bounty_per_problem / (g["days"] / 30.0)).mean()
+            ),
+            "std_dollars_per_month": (
+                (g["total_solved"] * bounty_per_problem / (g["days"] / 30.0)).std()
+            ),
+        }), include_groups=False)
+        .reset_index()
+    )
+    bounty_grouped["mode"] = bounty_grouped["matchmaking"].map(mode_labels)
+    bounty_fig = px.line(
+        bounty_grouped,
+        x="network_size",
+        y="mean_dollars_per_month",
+        error_y="std_dollars_per_month",
+        color="mode",
+        markers=True,
+        category_orders={"mode": mode_order},
+        color_discrete_map=mode_colors,
+        labels={
+            "network_size": "Number of users",
+            "mean_dollars_per_month": "Total bounty spent / month ($)",
+            "mode": "Mode",
+        },
+    )
+    bounty_fig.update_layout(yaxis_tickprefix="$", yaxis_tickformat=",.0f")
+    st.plotly_chart(bounty_fig, use_container_width=True)
+
+    st.subheader("Bounty Spent per User per Month vs Number of Users")
+    runs_df["dollars_per_user_per_month"] = (
+        runs_df["total_solved"] * bounty_per_problem / (runs_df["days"] / 30.0) / runs_df["network_size"]
+    )
+    bounty_per_user_grouped = (
+        runs_df.groupby(["network_size", "matchmaking"])["dollars_per_user_per_month"]
+        .agg(mean_dollars_per_user_per_month="mean", std_dollars_per_user_per_month="std")
+        .reset_index()
+    )
+    bounty_per_user_grouped["mode"] = bounty_per_user_grouped["matchmaking"].map(mode_labels)
+    bounty_per_user_fig = px.line(
+        bounty_per_user_grouped,
+        x="network_size",
+        y="mean_dollars_per_user_per_month",
+        error_y="std_dollars_per_user_per_month",
+        color="mode",
+        markers=True,
+        category_orders={"mode": mode_order},
+        color_discrete_map=mode_colors,
+        labels={
+            "network_size": "Number of users",
+            "mean_dollars_per_user_per_month": "Bounty spent / user / month ($)",
+            "mode": "Mode",
+        },
+    )
+    bounty_per_user_fig.update_layout(yaxis_tickprefix="$", yaxis_tickformat=",.2f")
+    st.plotly_chart(bounty_per_user_fig, use_container_width=True)
 
     st.subheader("Observed Mean Degree by Network Size")
     degree_grouped = (
@@ -576,6 +684,10 @@ def main() -> None:
 
     st.subheader("Estimated Critical Mass")
     st.table(pd.DataFrame(crossing_rows))
+
+    st.subheader("Selected Run Network Reach")
+    avg_fof = compute_average_friends_of_friends(selected_run)
+    st.metric("Average friends of friends", f"{avg_fof:,.2f}")
 
 
 if __name__ == "__main__":
