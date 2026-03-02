@@ -47,6 +47,7 @@ CONCURRENCY        = 50   # simultaneous users
 THREAD_CONCURRENCY = 20   # simultaneous tweet_thread.php requests (across all users)
 MAX_RETRIES        = 3
 RETRY_DELAY        = 5.0  # seconds, multiplied by attempt number
+VERBOSE            = False  # set via --verbose flag
 
 OUT_DIR = Path(__file__).parent / "outputs" / "tweets_live"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -84,6 +85,27 @@ class ErrorLog:
         """Always return a non-empty exception description."""
         msg = str(exc)
         return f"{type(exc).__name__}: {msg}" if msg.strip() else type(exc).__name__
+
+
+def vlog(msg: str) -> None:
+    """Print only when --verbose is active. Uses tqdm.write to avoid bar corruption."""
+    if VERBOSE:
+        tqdm.write(msg)
+
+
+def _tweet_summary(tweets: list[dict], indent: str = "    ") -> str:
+    """One line per tweet: tweet_id | @author | date | text snippet."""
+    lines = []
+    for t in tweets:
+        tid    = t.get("tweet_id") or t.get("id") or "?"
+        author = ((t.get("author") or {}).get("screen_name") or "?")
+        try:
+            date = parse_twitter_dt(t["created_at"]).strftime("%b %d %Y %H:%M")
+        except Exception:
+            date = (t.get("created_at") or "")[:16]
+        text   = (t.get("text") or "").replace("\n", " ")[:60]
+        lines.append(f"{indent}{tid} | @{author} | {date} | {text}")
+    return "\n".join(lines)
 
 
 # %% Supabase helpers
@@ -160,7 +182,9 @@ async def paginate_endpoint(
 
     - author_filter: if True, separate tweets into user's own tweets vs context
       tweets from others (needed for replies.php).
-    - Stopping condition: if any tweet on a page predates the cutoff, stop.
+    - Stopping condition: stop when a page has >10 author tweets and ALL of
+      them are older than the cutoff (avoids early stop from pinned/quoted
+      tweets mixed in with fresh content).
 
     Returns (user_tweets, context_tweets).
     """
@@ -172,6 +196,14 @@ async def paginate_endpoint(
 
     # Permanent API-level errors — retrying won't help
     PERMANENT_STATUSES = {"notfound", "suspended", "protected"}
+    MAX_EMPTY_RETRIES = 4   # retry same cursor this many times on an empty page
+    MAX_CURSOR_ADVANCES = 3  # after this many cursor advances with still 0 tweets, give up
+                             # (guards against Twitter's ~3200-tweet wall: the API spins
+                             # through cosmetically-different cursors that all embed the
+                             # same boundary tweet ID and never return content again)
+
+    empty_streak = 0     # consecutive empty-page responses for the current cursor
+    cursor_advances = 0  # how many times we advanced to a new cursor after all retries emptied
 
     while True:
         # ── fetch page with retries ───────────────────────────────────────────
@@ -193,6 +225,15 @@ async def paginate_endpoint(
             api_status = data.get("status")
 
             if api_status in (None, "ok", "active"):
+                page_tweets_raw = data.get("timeline", [])
+                next_cur = data.get("next_cursor") or "none"
+                vlog(
+                    f"  → [{endpoint}] @{username} "
+                    f"cursor_in={cursor!r} attempt={attempt+1} "
+                    f"→ {len(page_tweets_raw)} tweets  next_cursor={next_cur!r}"
+                )
+                if page_tweets_raw:
+                    vlog(_tweet_summary(page_tweets_raw))
                 break  # success
 
             # API returned an error status — check if permanent
@@ -216,9 +257,43 @@ async def paginate_endpoint(
 
         page_tweets: list[dict] = data.get("timeline", [])
         if not page_tweets:
-            break
+            empty_streak += 1
+            next_cursor_candidate = data.get("next_cursor")
+            if empty_streak < MAX_EMPTY_RETRIES:
+                vlog(
+                    f"  → [{endpoint}] @{username} empty page "
+                    f"(streak {empty_streak}/{MAX_EMPTY_RETRIES}), retrying cursor …"
+                )
+                await asyncio.sleep(RETRY_DELAY)
+                continue  # retry the same cursor
+            # Exhausted retries on this cursor — advance if the API gave a next_cursor
+            if next_cursor_candidate and next_cursor_candidate != cursor:
+                cursor_advances += 1
+                if cursor_advances > MAX_CURSOR_ADVANCES:
+                    vlog(
+                        f"  → [{endpoint}] @{username} {cursor_advances} cursor advances "
+                        f"all returned 0 tweets — likely hit timeline limit, stopping."
+                    )
+                    break
+                vlog(
+                    f"  → [{endpoint}] @{username} {MAX_EMPTY_RETRIES} empty pages, "
+                    f"advancing to next_cursor (advance {cursor_advances}/{MAX_CURSOR_ADVANCES}) …"
+                )
+                cursor = next_cursor_candidate
+                empty_streak = 0
+                continue
+            break  # no next_cursor to advance to, stop
 
-        reached_cutoff = False
+        empty_streak = 0     # reset on any page that returns tweets
+        cursor_advances = 0  # real content seen — reset the advance guard too
+
+        # For the cutoff check, count only the user's own tweets per page.
+        # Stop only when a page returns >10 author tweets AND every one of them
+        # is older than the archive — this avoids stopping early on pages that
+        # mix new tweets with a few old pinned/quoted tweets.
+        author_tweet_count = 0
+        old_tweet_count = 0
+
         for tweet in page_tweets:
             tweet["updated_at"] = request_time
 
@@ -226,24 +301,27 @@ async def paginate_endpoint(
                 ((tweet.get("author") or {}).get("screen_name") or "").lower() != username_lower
             )
 
-            if cutoff is not None and not is_context:
-                # Only use the user's own tweet dates for the stopping condition.
-                # Context tweets can be old root tweets from conversations where
-                # the user's reply is still newer than the cutoff — ignoring their
-                # dates prevents premature pagination stop.
+            if is_context:
+                context_tweets.append(tweet)
+                continue
+
+            if cutoff is not None:
                 try:
                     tweet_dt = parse_twitter_dt(tweet["created_at"])
                 except Exception:
                     user_tweets.append(tweet)
                     continue
+                author_tweet_count += 1
                 if tweet_dt <= cutoff:
-                    reached_cutoff = True
+                    old_tweet_count += 1
                     continue  # already in the archive, skip
                 user_tweets.append(tweet)
             else:
-                (context_tweets if is_context else user_tweets).append(tweet)
+                user_tweets.append(tweet)
 
-        if reached_cutoff:
+        # Reached cutoff when the page was clearly in archive territory:
+        # >10 author tweets seen and all of them predate the cutoff.
+        if cutoff is not None and author_tweet_count > 10 and author_tweet_count == old_tweet_count:
             break
 
         next_cursor = data.get("next_cursor")
@@ -302,8 +380,15 @@ async def fetch_thread(
 
     request_counter[0] += 1
     request_time = datetime.now(timezone.utc).isoformat()
+    thread_items = data.get("thread", [])
+    vlog(
+        f"  → [tweet_thread.php] @{username} id={root_tweet_id} "
+        f"→ {len(thread_items)} thread items"
+    )
+    if thread_items:
+        vlog(_tweet_summary(thread_items))
 
-    for item in data.get("thread", []):
+    for item in thread_items:
         item["tweet_id"] = item.pop("id", "")
         item["updated_at"] = request_time
 
@@ -333,15 +418,17 @@ async def fetch_user_tweets(
     tweet_counter: list[int],
     request_counter: list[int],
     error_log: ErrorLog,
+    force: bool = False,
 ) -> None:
     """
     Fetch all tweets + replies for `username` posted after `cutoff`,
     dedup by tweet_id, and write to outputs/tweets_live/{username}.jsonl.
     Context tweets from replies.php are saved to outputs/context_tweets_live/{username}.jsonl.
     Each tweet gets an `updated_at` = ISO timestamp of the page request.
+    Pass force=True to re-fetch even when the output file already exists.
     """
     out_file = OUT_DIR / f"{username}.jsonl"
-    if out_file.exists():
+    if out_file.exists() and not force:
         existing = sum(1 for l in out_file.read_text(encoding="utf-8").splitlines() if l.strip())
         tweet_counter[0] += existing
         pbar.set_postfix(tweets=f"{tweet_counter[0]:,}", reqs=f"{request_counter[0]:,}", refresh=False)
@@ -408,7 +495,7 @@ async def fetch_user_tweets(
 
 # %% Main
 
-async def main(plan_only: bool = False, only_users: list[str] | None = None) -> None:
+async def main(plan_only: bool = False, only_users: list[str] | None = None, force: bool = False) -> None:
     async with httpx.AsyncClient() as client:
 
         # ── Step 0: collect all users ─────────────────────────────────────────
@@ -506,7 +593,10 @@ async def main(plan_only: bool = False, only_users: list[str] | None = None) -> 
         already_done = sum(
             1 for u in all_users if (OUT_DIR / f"{u}.jsonl").exists()
         )
-        print(f"      Already fetched: {already_done} (skipping)")
+        if force:
+            print(f"      Already fetched: {already_done} (--force: will re-fetch)")
+        else:
+            print(f"      Already fetched: {already_done} (skipping)")
         print(f"      Concurrency: {CONCURRENCY}\n")
 
         semaphore        = asyncio.Semaphore(CONCURRENCY)
@@ -529,6 +619,7 @@ async def main(plan_only: bool = False, only_users: list[str] | None = None) -> 
                     tweet_counter,
                     request_counter,
                     error_log,
+                    force=force,
                 )
                 for uname_lower in all_users
             ]
@@ -546,14 +637,6 @@ async def main(plan_only: bool = False, only_users: list[str] | None = None) -> 
     if error_log.count:
         print(f"  Errors        : {error_log.count:,} → {ERR_FILE}")
 
-    if errors:
-        err_file = OUT_DIR / "_errors.txt"
-        err_file.write_text("\n".join(errors), encoding="utf-8")
-        print(f"\n  Errors ({len(errors)}) saved to {err_file}")
-        for e in errors[:20]:
-            print(f"    {e}")
-        if len(errors) > 20:
-            print(f"    … and {len(errors) - 20} more")
 
 
 if __name__ == "__main__":
@@ -569,5 +652,17 @@ if __name__ == "__main__":
         metavar="USERNAME",
         help="Only fetch these specific users (space-separated). Useful for testing.",
     )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Print each API call and its returned tweets (id, author, date) in real time.",
+    )
+    parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Re-fetch users even when their output file already exists.",
+    )
     args = parser.parse_args()
-    asyncio.run(main(plan_only=args.plan, only_users=args.users))
+    if args.verbose:
+        VERBOSE = True  # noqa: F841 — sets module global at __main__ level
+    asyncio.run(main(plan_only=args.plan, only_users=args.users, force=args.force))
