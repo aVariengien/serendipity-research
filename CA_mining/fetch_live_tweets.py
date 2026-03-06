@@ -38,13 +38,15 @@ TW_HEADERS = {
     "x-rapidapi-host": "twitter-api45.p.rapidapi.com",
     "x-rapidapi-key": RAPID_API_KEY,
 }
-TW_TIMELINE_URL = "https://twitter-api45.p.rapidapi.com/timeline.php"
-TW_REPLIES_URL  = "https://twitter-api45.p.rapidapi.com/replies.php"
-TW_THREAD_URL   = "https://twitter-api45.p.rapidapi.com/tweet_thread.php"
+TW_TIMELINE_URL    = "https://twitter-api45.p.rapidapi.com/timeline.php"
+TW_REPLIES_URL     = "https://twitter-api45.p.rapidapi.com/replies.php"
+TW_THREAD_URL      = "https://twitter-api45.p.rapidapi.com/tweet_thread.php"
+TW_SCREENINFO_URL  = "https://twitter-api45.p.rapidapi.com/screenname.php"
 
 # ── Script settings ───────────────────────────────────────────────────────────
-CONCURRENCY        = 50   # simultaneous users
-THREAD_CONCURRENCY = 20   # simultaneous tweet_thread.php requests (across all users)
+CONCURRENCY            = 50   # simultaneous users
+THREAD_CONCURRENCY     = 20   # simultaneous tweet_thread.php requests (across all users)
+SCREENINFO_CONCURRENCY = 20   # simultaneous screenname.php requests (enrichment step)
 MAX_RETRIES        = 3
 RETRY_DELAY        = 5.0  # seconds, multiplied by attempt number
 VERBOSE            = False  # set via --verbose flag
@@ -295,7 +297,7 @@ async def paginate_endpoint(
         old_tweet_count = 0
 
         for tweet in page_tweets:
-            tweet["updated_at"] = request_time
+            tweet["fetched_at"] = request_time
 
             is_context = author_filter and (
                 ((tweet.get("author") or {}).get("screen_name") or "").lower() != username_lower
@@ -390,7 +392,7 @@ async def fetch_thread(
 
     for item in thread_items:
         item["tweet_id"] = item.pop("id", "")
-        item["updated_at"] = request_time
+        item["fetched_at"] = request_time
 
         author_sn = ((item.get("author") or {}).get("screen_name") or "").lower()
         if author_sn != username_lower:
@@ -424,7 +426,7 @@ async def fetch_user_tweets(
     Fetch all tweets + replies for `username` posted after `cutoff`,
     dedup by tweet_id, and write to outputs/tweets_live/{username}.jsonl.
     Context tweets from replies.php are saved to outputs/context_tweets_live/{username}.jsonl.
-    Each tweet gets an `updated_at` = ISO timestamp of the page request.
+    Each tweet gets a `fetched_at` = ISO timestamp of the page request.
     Pass force=True to re-fetch even when the output file already exists.
     """
     out_file = OUT_DIR / f"{username}.jsonl"
@@ -493,13 +495,302 @@ async def fetch_user_tweets(
     pbar.update(1)
 
 
+# %% Author account_created_at enrichment
+
+def _collect_screen_names_from_tweet(
+    tweet: dict, names: set[str], only_missing: bool = False
+) -> None:
+    """Recursively collect author screen_names from a tweet and all nested sub-tweets.
+    If only_missing=True, skip authors that already have account_created_at."""
+    author = tweet.get("author")
+    if isinstance(author, dict):
+        if not only_missing or "account_created_at" not in author:
+            sn = (author.get("screen_name") or "").strip()
+            if sn:
+                names.add(sn.lower())
+    for key in ("quoted", "retweeted_tweet"):
+        nested = tweet.get(key)
+        if isinstance(nested, dict):
+            _collect_screen_names_from_tweet(nested, names, only_missing=only_missing)
+
+
+def _collect_screen_names_from_files(
+    files: list[Path], only_missing: bool = False
+) -> set[str]:
+    """
+    Return every unique screen_name (lowercased) found in the given JSONL files.
+    Recursively walks tweet.author, tweet.quoted.author,
+    tweet.retweeted_tweet.author, and any further nesting.
+    If only_missing=True, skips authors that already have account_created_at.
+    """
+    names: set[str] = set()
+    for f in files:
+        try:
+            for line in f.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    tweet = json.loads(line)
+                    _collect_screen_names_from_tweet(tweet, names, only_missing=only_missing)
+                except Exception:
+                    continue
+        except Exception:
+            continue
+    return names
+
+
+def _collect_screen_names(dirs: list[Path]) -> set[str]:
+    """Collect screen names from all JSONL files across the given directories."""
+    files = [f for d in dirs for f in sorted(d.glob("*.jsonl"))]
+    return _collect_screen_names_from_files(files)
+
+
+# Profile fields we enrich into every author object.
+# Maps: author dict key  →  (CA column, API response key | None)
+# num_likes is CA-only — the screenname.php endpoint doesn't expose it.
+_PROFILE_FIELDS: list[tuple[str, str, str | None]] = [
+    # (author_key,        ca_column,      api_key)
+    ("account_created_at", "created_at",   "created_at"),   # needs date parsing for API
+    ("num_tweets",         "num_tweets",   "statuses_count"),
+    ("num_following",      "num_following","friends"),
+    ("num_followers",      "num_followers","sub_count"),     # API exposes followers as sub_count
+    ("num_likes",          "num_likes",    None),            # CA-only
+]
+
+
+def _apply_author_profile(
+    tweet: dict, mapping: dict[str, dict], only_missing: bool = False
+) -> None:
+    """
+    Recursively inject profile fields into tweet.author and any nested sub-tweet
+    authors (quoted, retweeted_tweet, and further nesting). In-place.
+    Only sets fields present in `mapping`; never overwrites with None.
+    If only_missing=True, skips author objects that already have account_created_at.
+    """
+    author = tweet.get("author")
+    if isinstance(author, dict):
+        if not only_missing or "account_created_at" not in author:
+            sn = (author.get("screen_name") or "").lower()
+            if sn and sn in mapping:
+                for key, value in mapping[sn].items():
+                    if value is not None:
+                        author[key] = value
+    for key in ("quoted", "retweeted_tweet"):
+        nested = tweet.get(key)
+        if isinstance(nested, dict):
+            _apply_author_profile(nested, mapping, only_missing=only_missing)
+
+
+async def _fetch_screeninfo_one(
+    client: httpx.AsyncClient,
+    semaphore: asyncio.Semaphore,
+    screen_name: str,
+    error_log: ErrorLog,
+) -> tuple[str, dict]:
+    """
+    Call screenname.php for one account.
+    Returns (screen_name_lower, profile_dict) where profile_dict contains
+    only the keys we care about (author_key from _PROFILE_FIELDS), excluding
+    CA-only fields and None values.
+    """
+    async with semaphore:
+        for attempt in range(MAX_RETRIES):
+            try:
+                resp = await client.get(
+                    TW_SCREENINFO_URL,
+                    params={"screenname": screen_name},
+                    headers=TW_HEADERS,
+                    timeout=30.0,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                profile: dict = {}
+                for author_key, _ca_col, api_key in _PROFILE_FIELDS:
+                    if api_key is None:
+                        continue  # CA-only field
+                    raw = data.get(api_key)
+                    if raw is None:
+                        continue
+                    if author_key == "account_created_at":
+                        try:
+                            raw = parse_twitter_dt(str(raw)).isoformat()
+                        except Exception:
+                            pass
+                    profile[author_key] = raw
+                return screen_name.lower(), profile
+            except Exception as exc:
+                if attempt == MAX_RETRIES - 1:
+                    await error_log.log(
+                        f"screenname.php @{screen_name}: {ErrorLog.fmt(exc)}"
+                    )
+                    return screen_name.lower(), {}
+                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+    return screen_name.lower(), {}
+
+
+async def enrich_author_profiles(
+    client: httpx.AsyncClient,
+    error_log: ErrorLog,
+    step_label: str = "3",
+    only_users: list[str] | None = None,
+    only_missing: bool = False,
+) -> None:
+    """
+    Enrich all JSONL files in tweets_live/ and context_tweets_live/ with
+    author profile fields: account_created_at, num_tweets, num_following,
+    num_followers, num_likes (CA-only).
+
+    If only_users is given, only process the JSONL files for those usernames
+    (both tweets_live/<user>.jsonl and context_tweets_live/<user>.jsonl).
+
+    If only_missing=True, skip any author object that already has
+    account_created_at — useful for incremental re-runs to avoid redundant
+    API calls.
+
+    Strategy (CA takes priority over API):
+      1. Pull all fields from CA all_account for any screen_name already there.
+      2. Call screenname.php for every remaining screen_name.
+      3. Rewrite every JSONL file injecting fields into tweet.author (and
+         tweet.quoted.author).
+    """
+    ca_select = ",".join(
+        ["username"] + [ca_col for _, ca_col, _ in _PROFILE_FIELDS]
+    )
+    print(f"[{step_label}] Enriching author profiles "
+          f"(created_at / num_tweets / num_following / num_followers / num_likes) …")
+
+    # ── Resolve target files ──────────────────────────────────────────────────
+    if only_users:
+        filter_stems = {u.lower() for u in only_users}
+        target_files = [
+            f for d in [OUT_DIR, CONTEXT_DIR]
+            for f in sorted(d.glob("*.jsonl"))
+            if f.stem.lower() in filter_stems
+        ]
+        if not target_files:
+            print(f"      No JSONL files found for: {', '.join(sorted(filter_stems))}")
+            return
+        print(f"      Filtering to {len(target_files)} file(s): "
+              f"{', '.join(f.name for f in target_files)}")
+    else:
+        target_files = [
+            f for d in [OUT_DIR, CONTEXT_DIR]
+            for f in sorted(d.glob("*.jsonl"))
+        ]
+
+    # ── 1. Collect all unique screen names from target files ──────────────────
+    screen_names = _collect_screen_names_from_files(target_files, only_missing=only_missing)
+    if not screen_names:
+        msg = "all authors already enriched" if only_missing else "no JSONL files found"
+        print(f"      Nothing to do — {msg}.")
+        return
+    suffix = " (skipping already-enriched authors)" if only_missing else ""
+    print(f"      {len(screen_names):,} unique screen names to enrich{suffix}")
+
+    # ── 2. Look up profile data from Community Archive (all_account table) ────
+    print("      Fetching profile data from Community Archive …")
+    ca_rows = await ca_get(client, "all_account", {"select": ca_select})
+    ca_map: dict[str, dict] = {}
+    for row in ca_rows:
+        uname = (row.get("username") or "").lower().strip()
+        if not uname:
+            continue
+        profile: dict = {}
+        for author_key, ca_col, _api_key in _PROFILE_FIELDS:
+            val = row.get(ca_col)
+            if val is not None:
+                profile[author_key] = val
+        if profile:
+            ca_map[uname] = profile
+
+    # Decide which screen names need an API call:
+    # any name not in CA, OR in CA but missing account_created_at
+    missing = {
+        sn for sn in screen_names
+        if sn not in ca_map or "account_created_at" not in ca_map[sn]
+    }
+    covered = len(screen_names) - len(missing)
+    print(f"      {covered:,} fully covered by CA, {len(missing):,} need API calls")
+
+    # ── 3. Fetch missing screen names from screenname.php ─────────────────────
+    api_map: dict[str, dict] = {}
+    if missing:
+        semaphore = asyncio.Semaphore(SCREENINFO_CONCURRENCY)
+        results: list[tuple[str, dict]] = []
+
+        with tqdm(total=len(missing), desc="  screeninfo", unit=" accts", dynamic_ncols=True) as pbar:
+            async def _one(sn: str) -> None:
+                results.append(
+                    await _fetch_screeninfo_one(client, semaphore, sn, error_log)
+                )
+                pbar.update(1)
+
+            await asyncio.gather(*[_one(sn) for sn in missing])
+
+        api_map = {sn: p for sn, p in results if p}
+        not_found = len(missing) - len(api_map)
+        print(f"      {len(api_map):,} fetched via API  "
+              f"({not_found:,} not found / suspended / no data)")
+
+    # ── 4. Merge: start with API data, let CA overwrite (CA takes priority) ────
+    full_map: dict[str, dict] = {}
+    for sn, profile in api_map.items():
+        full_map[sn] = dict(profile)
+    for sn, profile in ca_map.items():
+        if sn in full_map:
+            full_map[sn].update(profile)   # CA wins on any shared key
+        else:
+            full_map[sn] = dict(profile)
+
+    # ── 5. Rewrite JSONL files ─────────────────────────────────────────────────
+    files_rewritten = 0
+    tweets_total = 0
+
+    for f in tqdm(target_files, desc="  Rewriting", unit=" files", dynamic_ncols=True):
+        lines_out: list[str] = []
+        try:
+            for line in f.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    tweet = json.loads(line)
+                    _apply_author_profile(tweet, full_map, only_missing=only_missing)
+                    lines_out.append(json.dumps(tweet, ensure_ascii=False))
+                    tweets_total += 1
+                except Exception:
+                    lines_out.append(line)
+        except Exception as exc:
+            await error_log.log(f"enrich rewrite {f.name}: {ErrorLog.fmt(exc)}")
+            continue
+
+        if lines_out:
+            f.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
+            files_rewritten += 1
+
+    print(f"      {files_rewritten:,} files rewritten, {tweets_total:,} tweet objects enriched")
+
+
 # %% Main
 
-async def main(plan_only: bool = False, only_users: list[str] | None = None, force: bool = False) -> None:
+async def main(plan_only: bool = False, only_users: list[str] | None = None, force: bool = False, enrich_only: bool = False) -> None:
+    error_log = ErrorLog(ERR_FILE)
+
     async with httpx.AsyncClient() as client:
 
+        # ── Enrich-only shortcut ──────────────────────────────────────────────
+        if enrich_only:
+            await enrich_author_profiles(
+                client, error_log, step_label="1/1", only_users=only_users,
+                only_missing=True,
+            )
+            if error_log.count:
+                print(f"  Errors: {error_log.count:,} → {ERR_FILE}")
+            return
+
         # ── Step 0: collect all users ─────────────────────────────────────────
-        print("[0/3] Fetching users from Community Archive …")
+        print("[0/4] Fetching users from Community Archive …")
 
         ca_accounts = await ca_get(client, "account", {"select": "account_id,username"})
         ca_map: dict[str, str] = {a["username"].lower(): a["account_id"] for a in ca_accounts}
@@ -533,7 +824,7 @@ async def main(plan_only: bool = False, only_users: list[str] | None = None, for
         print()
 
         # ── Step 1: get latest archive_at per account_id ───────────────────────
-        print("[1/3] Fetching latest archive upload dates …")
+        print("[1/4] Fetching latest archive upload dates …")
         upload_rows = await ca_get(
             client,
             "archive_upload",
@@ -589,7 +880,7 @@ async def main(plan_only: bool = False, only_users: list[str] | None = None, for
             return
 
         # ── Step 2: fetch live tweets ─────────────────────────────────────────
-        print(f"[2/3] Fetching live tweets for {len(all_users):,} users …")
+        print(f"[2/4] Fetching live tweets for {len(all_users):,} users …")
         already_done = sum(
             1 for u in all_users if (OUT_DIR / f"{u}.jsonl").exists()
         )
@@ -603,7 +894,6 @@ async def main(plan_only: bool = False, only_users: list[str] | None = None, for
         thread_semaphore = asyncio.Semaphore(THREAD_CONCURRENCY)
         tweet_counter: list[int]   = [0]
         request_counter: list[int] = [0]
-        error_log = ErrorLog(ERR_FILE)
 
         with tqdm(
             total=len(all_users), desc="Users", unit=" users", dynamic_ncols=True
@@ -625,8 +915,11 @@ async def main(plan_only: bool = False, only_users: list[str] | None = None, for
             ]
             await asyncio.gather(*tasks)
 
-    # ── Step 3: summary ───────────────────────────────────────────────────────
-    print("\n[3/3] Summary")
+        # ── Step 3: enrich author account_created_at ──────────────────────────
+        await enrich_author_profiles(client, error_log, step_label="3/4", only_users=only_users)
+
+    # ── Step 4: summary ───────────────────────────────────────────────────────
+    print("\n[4/4] Summary")
 
     n_user_files = sum(1 for u in all_users if (OUT_DIR / f"{orig_case.get(u, u)}.jsonl").exists())
     n_ctx_files  = sum(1 for u in all_users if (CONTEXT_DIR / f"{orig_case.get(u, u)}.jsonl").exists())
@@ -662,7 +955,21 @@ if __name__ == "__main__":
         action="store_true",
         help="Re-fetch users even when their output file already exists.",
     )
+    parser.add_argument(
+        "--enrich-only",
+        action="store_true",
+        help=(
+            "Skip tweet fetching entirely. Only run the account_created_at enrichment "
+            "step on all existing JSONL files in outputs/tweets_live/ and "
+            "outputs/context_tweets_live/."
+        ),
+    )
     args = parser.parse_args()
     if args.verbose:
         VERBOSE = True  # noqa: F841 — sets module global at __main__ level
-    asyncio.run(main(plan_only=args.plan, only_users=args.users, force=args.force))
+    asyncio.run(main(
+        plan_only=args.plan,
+        only_users=args.users,
+        force=args.force,
+        enrich_only=args.enrich_only,
+    ))

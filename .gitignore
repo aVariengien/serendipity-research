@@ -24,6 +24,19 @@ node_modules/
 
 # Generated outputs and larger data artifacts
 econ_model_claudeconnect/results/
+
+# CA_mining: external repos included for reference only (not to be committed)
+CA_mining/community-archive/
+CA_mining/community-archive-stream/
+CA_mining/docs/
+CA_mining/CA_Tools/
+
+# CA_mining: data outputs, archives, scratch files
+CA_mining/outputs/
+CA_mining/past_outputs/
+CA_mining/users/
+CA_mining/output_tweets*.zip
+CA_mining/test_tweet*.txt
 *.parquet
 *.feather
 *.h5
